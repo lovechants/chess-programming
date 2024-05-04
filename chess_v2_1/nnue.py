@@ -81,9 +81,9 @@ def process_training_data(data, num_moves=4096):
     return inputs, policy_targets,value_targets
 
 def train_network(model, inputs, policy_targets, value_targets, epochs=20, batch_size=32): 
-    log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    history = model.fit(inputs, [policy_targets, value_targets], epochs=epochs, batch_size=batch_size, verbose=1, callbacks=[tensorboard_callback])
+    #log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    #tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    history = model.fit(inputs, [policy_targets, value_targets], epochs=epochs, batch_size=batch_size, verbose=1)#, callbacks=[tensorboard_callback])
     return history
 
 
