@@ -1,29 +1,35 @@
 from lib import * 
 from nnue import * 
+import csv 
+def log_game(game_number, turn, move, fen):
+    with open('data_logs/game_log.csv','a',newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([game_number, turn, move, fen])
 
 def self_simulate(node, model, max_steps, move_map):
     board = node.board.copy()
     data = []
     training_data = []
     policy = None 
-    print("Starting simulation with board state:", board.fen())
-    steps = 0
-    with open(f'fens_from_game', 'w') as file:
-        while not board.is_game_over() and steps < max_steps:
-                policy, _ = model.predict(fen_to_tensor(board.fen())[np.newaxis, :])
-                best_move = predict_move(board, policy)
-                print(f"Simulating move {best_move} at step {steps}")
-                board.push(best_move)
-                print(f"Simulated move: {best_move}, Resulting board:\n {board}")
-                time.sleep(.1)
-                file.write(board.fen()+'\n')
-                steps += 1
-                print("Updated board state:", board.fen())
-                time.sleep(.2)
-                node.move = best_move
-                policy = policy
-                if board.is_game_over():
-                    print("Game Over detected. Reason:", board.result())
+    #print("Starting simulation with board state:", board.fen())
+    steps = 0 
+    game_number = 0
+    while not board.is_game_over() and steps < max_steps - 1:
+            policy, _ = model.predict(fen_to_tensor(board.fen())[np.newaxis, :])
+            best_move = predict_move(board, policy)
+            #print(f"Simulating move {best_move} at step {steps}")
+            board.push(best_move)
+            #print(f"Simulated move: {best_move}, Resulting board:\n {board}")
+            #time.sleep(.1)
+            steps += 1
+            #print("Updated board state:", board.fen())
+            #time.sleep(.2)
+            node.move = best_move
+            policy = policy
+            log_game(game_number + 1, steps + 1, best_move, board.fen())
+    if board.is_game_over():
+        print("Game Over detected. Reason:", board.result())
+        game_number +=1
 
     data.append((board.fen(), node.move.uci(), policy))
     node.board = board 
@@ -35,7 +41,7 @@ def self_simulate(node, model, max_steps, move_map):
         print("Training data is empty or misaligned")
     
     print("Training model...")
-    time.sleep(.1)
+    #time.sleep(.1)
     train_network(model, inputs, policy_targets, value_targets)
 
     # Save the model after each training iteration
@@ -68,7 +74,7 @@ def predict_move(board, policy):
         if index >= 0 and index < policy.shape[1]:
             mask[0,index] = True
             valid_moves = True
-            print(f"Move: {move_uci}, Index: {index}, Policy Score: {policy[0][index]}")
+            #print(f"Move: {move_uci}, Index: {index}, Policy Score: {policy[0][index]}")
         else:
             print(f"Move: {move_uci}, Index: {index} - Index out of bounds")
     if not valid_moves:
@@ -78,7 +84,7 @@ def predict_move(board, policy):
     masked_policy = np.where(mask, policy, 0)
     best_move_idx = np.argmax(masked_policy)
     if masked_policy[0, best_move_idx] == 0:
-        print(" No valid moves have positive scores")
+        #print(" No valid moves have positive scores")
         pass
 
     best_move = legal_moves[best_move_idx % len(legal_moves)]  # Modulo operation to ensure index is within bounds

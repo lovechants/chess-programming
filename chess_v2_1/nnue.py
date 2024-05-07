@@ -1,4 +1,6 @@
 from lib import * 
+from keras.callbacks import LambdaCallback, ModelCheckpoint
+import csv 
 """
 Typical Args
 board_size = 8 (8x8)
@@ -8,7 +10,7 @@ Where n_layers can be increased for a deeper network
 """
 
 def create_model(board_size, num_channels, n_layers):
-    shape = (board_size, board_size, 17) # 14 = Standard chess + castling and promotion channels
+    shape = (board_size, board_size, 17) # 17 = Standard chess(12) + castling and promotion channels
     inputs = Input(shape=shape)
     
     # Convolution
@@ -27,18 +29,19 @@ def create_model(board_size, num_channels, n_layers):
     # Policy
     policy_conv = Conv2D(2, kernel_size=1)(x)
     policy_flat = Flatten()(policy_conv)
-    policy_output = Dense(4096, activation='softmax')(policy_flat)
+    policy_output = Dense(4096, activation='softmax', name='policy_output')(policy_flat)
     #print("Policy layers and output created")
 
     # Value 
     value_conv = Conv2D(1, kernel_size=1)(x)
     value_flat = Flatten()(value_conv)
     value_hidden = Dense(64, activation='relu')(value_flat)
-    value_output = Dense(1, activation='tanh')(value_hidden)
+    value_output = Dense(1, activation='tanh', name='value_output')(value_hidden)
 
     #print("Value layers and output created")
     model = Model(inputs=inputs, outputs=[policy_output, value_output])
-    model.compile(optimizer='adam', loss=['categorical_crossentropy', 'mean_squared_error'])
+    model.compile(optimizer='adam', loss={'policy_output':'categorical_crossentropy', 'value_output':'mean_squared_error'}, metrics={'policy_output': 'accuracy', 'value_output': 'mse'})
+    
     #print("Model Created and Compiled")
     return model 
 
@@ -80,54 +83,41 @@ def process_training_data(data, num_moves=4096):
     
     return inputs, policy_targets,value_targets
 
+checkpoint_path = "best_model.h5"
+#checkpoint_callback=ModelCheckpoint(
+#        checkpoint_path,
+#        monitor='val_loss',
+#        save_best_only=True,
+#        verbose=1,
+#        mode='min')
+
+checkpoint = ModelCheckpoint(
+        checkpoint_path,
+        monitor='val_loss',
+        save_best_only=True,
+        verbose=1,
+        mode='min')
+
+def log_training(epoch, logs):
+    with open ('data_logs/training_metrics.csv', 'a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([epoch, logs.get('policy_output_loss'), logs.get('value_output_loss')])
+
 def train_network(model, inputs, policy_targets, value_targets, epochs=20, batch_size=32): 
     #log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     #tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    history = model.fit(inputs, [policy_targets, value_targets], epochs=epochs, batch_size=batch_size, verbose=1)#, callbacks=[tensorboard_callback])
+    history = model.fit(
+            inputs, 
+            [policy_targets, value_targets], 
+            epochs=epochs, 
+            batch_size=batch_size, 
+            verbose=1,
+            callbacks=[checkpoint, LambdaCallback(on_epoch_end=lambda epoch, logs: log_training(epoch,logs))]
+    )
+
+    #, callbacks=[tensorboard_callback])
     return history
-
-
-# This function has taken up so many hours atp
-def predict_move(board, policy):
-    if not isinstance(board, chess.Board):
-        raise ValueError("Board must be a chess.Board object")
     
-    legal_moves = list(board.legal_moves)
-    move_indices = {move.uci(): i for i, move in enumerate(legal_moves)}
-    policy = add_noise(policy)
-    
-    # Ensure policy is reshaped correctly if necessary; assuming policy shape from model is (1, 4672)
-    if policy.ndim == 1:
-        policy = policy.reshape(1, -1)
-
-    # Initialize the mask with the correct dimensions
-    mask = np.zeros_like(policy, dtype=bool)
-
-    # Set valid entries in mask
-    valid_moves=False
-    for move in legal_moves:
-        move_uci = move.uci()
-        index = move_indices.get(move_uci, -1)
-        if index >= 0 and index < policy.shape[1]:
-            mask[0,index] = True
-            valid_moves = True
-            print(f"Move: {move_uci}, Index: {index}, Policy Score: {policy[0][index]}")
-        else:
-            print(f"Move: {move_uci}, Index: {index} - Index out of bounds")
-    if not valid_moves:
-        print("No valid moves found")
-        return None 
-    # Apply mask to policy and select the best move
-    masked_policy = np.where(mask, policy, 0)
-    best_move_idx = np.argmax(masked_policy)
-    if masked_policy[0, best_move_idx] == 0:
-        print(" No valid moves have positive scores")
-        pass
-
-    best_move = legal_moves[best_move_idx % len(legal_moves)]  # Modulo operation to ensure index is within bounds
-
-    return best_move
-
 # Convert Fen into Tensors
 def fen_to_tensor(fen):
     board = chess.Board(fen)

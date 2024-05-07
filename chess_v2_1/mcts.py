@@ -42,27 +42,9 @@ def select_child(node):
     exploration_constant = 2.39
     return max(node.children, key=lambda x: x.win_score / x.visit_count + exploration_constant *  math.sqrt(2 * log_vertex / x.visit_count))
 
-def apply_temperature(policy, temp=1.0):
-    if temp == 0:
-        new_policy = np.zeros_like(policy)
-        new_policy[np.argmax(policy)] = 1 
-        return new_policy
-    else:
-        softened_policy = np.exp(np.log(policy + 1e-6) / temp)
-        softened_policy /= softened_policy.sum()
-        return softened_policy
-
-def add_noise(policy, noise=.06):
-    noise = np.random.randn(*policy.shape) * noise
-    noise_policy = policy + noise
-    noise_policy = np.clip(noise_policy, 0,1)
-    noise_policy /= noise_policy.sum()
-
-    return noise_policy
-
 def expand(node, debug=False):
     if node.board is None:
-        raise Exception("trying to expand a node without a balid board object")
+        raise Exception("trying to expand a node without a valid board object")
     legal_moves = list(node.board.legal_moves)
     if not legal_moves:
         print("no legal moves available to expand")
@@ -120,21 +102,21 @@ def simulate(node, model, max_steps):
     while not board.is_game_over() and steps < max_steps:
         policy, _ = model.predict(fen_to_tensor(board.fen())[np.newaxis, :])
         best_move = predict_move(board, policy)
-        print(f"Simulating move {best_move} at step {steps}")
-        time.sleep(.1)
+        #print(f"Simulating move {best_move} at step {steps}")
+        #time.sleep(.1)
         board.push(best_move)
-        print(f"Simulated move: {best_move}, Resulting board:\n {board}")
-        time.sleep(.1)#
+        #print(f"Simulated move: {best_move}, Resulting board:\n {board}")
+        #time.sleep(.1)#
         data.append((board.fen(), best_move.uci(), policy))
-        steps += 1
-        print("Updated board state:", board.fen())
-        time.sleep(.1)
+        #steps += 1
+        #print("Updated board state:", board.fen())
+        #time.sleep(.1)
         node.move = best_move
     
     node.board = board 
     result = combinded_eval(board)
-    print(f"Simulation Result: {result}")
-    time.sleep(.1)
+    #print(f"Simulation Result: {result}")
+    #time.sleep(.1)
     return result, data
 
 def backpropagate(node, win_score):
@@ -145,12 +127,12 @@ def backpropagate(node, win_score):
         current_node.win_score += win_score
         current_node.visit_count += 1
         path.append(f"Backpropagating: Node at {current_node.state} now has win score {current_node.win_score} and visit count {current_node.visit_count}")
-        time.sleep(.1)
+        #time.sleep(.1)
         current_node = current_node.parent
     
-    print("backpropagation path:")
-    for state in reversed(path):
-        print(state)
+    #print("backpropagation path:")
+    #for state in reversed(path):
+        #print(state)
 
 def mcts(root, depth):
     move_map = initialize_move_index()
